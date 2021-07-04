@@ -28,54 +28,90 @@
 
 package gr.gousiosg.javacg.stat;
 
+import gr.gousiosg.javacg.common.Constants;
+import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.JavaClass;
 import org.apache.bcel.generic.*;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * The simplest of method visitors, prints any invoked method
  * signature for all method invocations.
- * 
+ * <p>
  * Class copied with modifications from CJKM: http://www.spinellis.gr/sw/ckjm/
  */
 public class MethodVisitor extends EmptyVisitor {
 
-    JavaClass visitedClass;
+    private JavaClass visitedClass;
     private MethodGen mg;
     private ConstantPoolGen cp;
     private String format;
     private List<String> methodCalls = new ArrayList<>();
 
-    public MethodVisitor(MethodGen m, JavaClass jc) {
+    // added by adrninistrator
+    private Map<String, Set<String>> calleeMethodMap;
+    private Map<String, Boolean> runnableImplClassMap;
+    private Map<String, Set<String>> methodAnnotationMap;
+    // added end
+
+    public MethodVisitor(MethodGen m, JavaClass jc, Map<String, Set<String>> calleeMethodMap, Map<String, Boolean> runnableImplClassMap,
+                         Map<String, Set<String>> methodAnnotationMap) {
         visitedClass = jc;
         mg = m;
         cp = mg.getConstantPool();
-        format = "M:" + visitedClass.getClassName() + ":" + mg.getName() + "(" + argumentList(mg.getArgumentTypes()) + ")"
-            + " " + "(%s)%s:%s(%s)";
+
+        // modified by adrninistrator
+        this.calleeMethodMap = calleeMethodMap;
+        this.runnableImplClassMap = runnableImplClassMap;
+        this.methodAnnotationMap = methodAnnotationMap;
+
+        String fullMethod = visitedClass.getClassName() + ":" + mg.getName() + CommonUtil.argumentList(mg.getArgumentTypes());
+
+        handleAnnotationName(fullMethod);
+
+        format = "M:" + fullMethod + " " + "(%s)%s:%s%s";
     }
 
-    private String argumentList(Type[] arguments) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < arguments.length; i++) {
-            if (i != 0) {
-                sb.append(",");
-            }
-            sb.append(arguments[i].toString());
+    // added by adrninistrator
+    private void handleAnnotationName(String fullMethod) {
+        AnnotationEntryGen[] annotationEntryGens = mg.getAnnotationEntries();
+        if (annotationEntryGens == null || annotationEntryGens.length == 0) {
+            return;
         }
-        return sb.toString();
+
+        Set<String> annotationNameSet = methodAnnotationMap.get(fullMethod);
+        if (annotationNameSet != null) {
+            return;
+        }
+
+        annotationNameSet = new HashSet<>();
+        for (AnnotationEntryGen annotationEntryGen : annotationEntryGens) {
+            String annotationName = getAnnotationName(annotationEntryGen.getTypeName());
+            annotationNameSet.add(annotationName);
+        }
+        methodAnnotationMap.put(fullMethod, annotationNameSet);
     }
+
+    private String getAnnotationName(String origName) {
+        String tmpName;
+        if (origName.startsWith("L") && origName.endsWith(";")) {
+            tmpName = origName.substring(1, origName.length() - 1);
+        } else {
+            tmpName = origName;
+        }
+        return tmpName.replace("/", ".");
+    }
+    // added end
 
     public List<String> start() {
         if (mg.isAbstract() || mg.isNative())
             return Collections.emptyList();
 
-        for (InstructionHandle ih = mg.getInstructionList().getStart(); 
-                ih != null; ih = ih.getNext()) {
+        for (InstructionHandle ih = mg.getInstructionList().getStart();
+             ih != null; ih = ih.getNext()) {
             Instruction i = ih.getInstruction();
-            
+
             if (!visitInstruction(i))
                 i.accept(this);
         }
@@ -85,33 +121,73 @@ public class MethodVisitor extends EmptyVisitor {
     private boolean visitInstruction(Instruction i) {
         short opcode = i.getOpcode();
         return ((InstructionConst.getInstruction(opcode) != null)
-                && !(i instanceof ConstantPushInstruction) 
+                && !(i instanceof ConstantPushInstruction)
                 && !(i instanceof ReturnInstruction));
     }
 
     @Override
     public void visitINVOKEVIRTUAL(INVOKEVIRTUAL i) {
-        methodCalls.add(String.format(format,"M",i.getReferenceType(cp),i.getMethodName(cp),argumentList(i.getArgumentTypes(cp))));
+        addMethodCalls("M", i.getReferenceType(cp).toString(), i.getMethodName(cp), CommonUtil.argumentList(i.getArgumentTypes(cp)));
     }
 
     @Override
     public void visitINVOKEINTERFACE(INVOKEINTERFACE i) {
-        methodCalls.add(String.format(format,"I",i.getReferenceType(cp),i.getMethodName(cp),argumentList(i.getArgumentTypes(cp))));
+        addMethodCalls("I", i.getReferenceType(cp).toString(), i.getMethodName(cp), CommonUtil.argumentList(i.getArgumentTypes(cp)));
     }
 
     @Override
     public void visitINVOKESPECIAL(INVOKESPECIAL i) {
-        methodCalls.add(String.format(format,"O",i.getReferenceType(cp),i.getMethodName(cp),argumentList(i.getArgumentTypes(cp))));
+        addMethodCalls("O", i.getReferenceType(cp).toString(), i.getMethodName(cp), CommonUtil.argumentList(i.getArgumentTypes(cp)));
     }
 
     @Override
     public void visitINVOKESTATIC(INVOKESTATIC i) {
-        methodCalls.add(String.format(format,"S",i.getReferenceType(cp),i.getMethodName(cp),argumentList(i.getArgumentTypes(cp))));
+        addMethodCalls("S", i.getReferenceType(cp).toString(), i.getMethodName(cp), CommonUtil.argumentList(i.getArgumentTypes(cp)));
     }
 
     @Override
     public void visitINVOKEDYNAMIC(INVOKEDYNAMIC i) {
-        methodCalls.add(String.format(format,"D",i.getType(cp),i.getMethodName(cp),
-                argumentList(i.getArgumentTypes(cp))));
+        addMethodCalls("D", i.getType(cp).toString(), i.getMethodName(cp), CommonUtil.argumentList(i.getArgumentTypes(cp)));
     }
+
+    // added by adrninistrator
+    private void addMethodCalls(String type, String calleeClassName, String calleeMethodName, String calleeMethodArgs) {
+
+        // add callee method info
+        Set<String> calleeMethodWithArgsSet = calleeMethodMap.get(calleeClassName);
+        if (calleeMethodWithArgsSet == null) {
+            calleeMethodWithArgsSet = new HashSet<>();
+            calleeMethodMap.put(calleeClassName, calleeMethodWithArgsSet);
+        }
+        calleeMethodWithArgsSet.add(calleeMethodName + calleeMethodArgs);
+
+        boolean skipRawMethodCall = false;
+
+        // add Runnable impl classes
+        if ("<init>".equals(calleeMethodName)) {
+            Boolean recorded = runnableImplClassMap.get(calleeClassName);
+            if (recorded != null) {
+                // do not record original call type
+                skipRawMethodCall = true;
+                // other function call runnable impl class <init>
+                methodCalls.add(String.format(format, Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs));
+            }
+
+            if(Boolean.FALSE.equals(recorded)){
+                // call runnable impl class <init> call runnable impl class run()
+                String runnableImplClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
+                        Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName);
+                methodCalls.add(runnableImplClassMethod);
+
+                runnableImplClassMap.put(calleeClassName, Boolean.TRUE);
+            }
+        }
+
+        if(skipRawMethodCall) {
+            return;
+        }
+
+        methodCalls.add(String.format(format, type, calleeClassName, calleeMethodName, calleeMethodArgs));
+    }
+    // added end
 }

@@ -28,16 +28,16 @@
 
 package gr.gousiosg.javacg.stat;
 
-import org.apache.bcel.classfile.Constant;
-import org.apache.bcel.classfile.ConstantPool;
-import org.apache.bcel.classfile.EmptyVisitor;
-import org.apache.bcel.classfile.JavaClass;
-import org.apache.bcel.classfile.Method;
+import gr.gousiosg.javacg.common.Constants;
+import gr.gousiosg.javacg.util.CommonUtil;
+import org.apache.bcel.classfile.*;
 import org.apache.bcel.generic.ConstantPoolGen;
 import org.apache.bcel.generic.MethodGen;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * The simplest of class visitors, invokes the method visitor class for each
@@ -51,24 +51,43 @@ public class ClassVisitor extends EmptyVisitor {
     private final DynamicCallManager DCManager = new DynamicCallManager();
     private List<String> methodCalls = new ArrayList<>();
 
-    public ClassVisitor(JavaClass jc) {
+    // added by adrninistrator
+    private Map<String, Set<String>> calleeMethodMap;
+    private Map<String, Boolean> runnableImplClassMap;
+    private Map<String, Set<String>> methodAnnotationMap;
+    // added end
+
+    public ClassVisitor(JavaClass jc, Map<String, Set<String>> calleeMethodMap, Map<String, Boolean> runnableImplClassMap,
+                        Map<String, Set<String>> methodAnnotationMap) {
         clazz = jc;
         constants = new ConstantPoolGen(clazz.getConstantPool());
         classReferenceFormat = "C:" + clazz.getClassName() + " %s";
+        this.calleeMethodMap = calleeMethodMap;
+        this.runnableImplClassMap = runnableImplClassMap;
+        this.methodAnnotationMap = methodAnnotationMap;
     }
 
+    @Override
     public void visitJavaClass(JavaClass jc) {
         jc.getConstantPool().accept(this);
         Method[] methods = jc.getMethods();
         for (int i = 0; i < methods.length; i++) {
             Method method = methods[i];
+            // modified by adrninistrator
+            DCManager.clearLambdaMethodNameSet();
             DCManager.retrieveCalls(method, jc);
             DCManager.linkCalls(method);
-            method.accept(this);
 
+            Set<String> lambdaMethodNameSet = DCManager.getLambdaMethodNameSet();
+            // record lambda method call
+            recordLambdaMethodCall(lambdaMethodNameSet, jc, method);
+            // modified end
+
+            method.accept(this);
         }
     }
 
+    @Override
     public void visitConstantPool(ConstantPool constantPool) {
         for (int i = 0; i < constantPool.getLength(); i++) {
             Constant constant = constantPool.getConstant(i);
@@ -77,14 +96,18 @@ public class ClassVisitor extends EmptyVisitor {
             if (constant.getTag() == 7) {
                 String referencedClass = 
                     constantPool.constantToString(constant);
-                System.out.println(String.format(classReferenceFormat, referencedClass));
+
+                // modified by adrninistrator
+                methodCalls.add(String.format(classReferenceFormat, referencedClass));
+                // modified end
             }
         }
     }
 
+    @Override
     public void visitMethod(Method method) {
         MethodGen mg = new MethodGen(method, clazz.getClassName(), constants);
-        MethodVisitor visitor = new MethodVisitor(mg, clazz);
+        MethodVisitor visitor = new MethodVisitor(mg, clazz, calleeMethodMap, runnableImplClassMap, methodAnnotationMap);
         methodCalls.addAll(visitor.start());
     }
 
@@ -96,4 +119,26 @@ public class ClassVisitor extends EmptyVisitor {
     public List<String> methodCalls() {
         return this.methodCalls;
     }
+
+    // added by adrninistrator
+    // record lambda method call
+    private void recordLambdaMethodCall(Set<String> lambdaMethodNameSet,JavaClass jc,Method origMethod) {
+        if (lambdaMethodNameSet.isEmpty()) {
+            return;
+        }
+        for (String lambdaMethodName : lambdaMethodNameSet) {
+            Method[] methods = jc.getMethods();
+            for (Method method : methods) {
+                if (!lambdaMethodName.equals(method.getName())) {
+                    continue;
+                }
+                String lambdaMethodCall = String.format("M:%s:%s%s (%s)%s:%s%s", jc.getClassName(), origMethod.getName(),
+                        CommonUtil.argumentList(origMethod.getArgumentTypes()),
+                        Constants.CALL_TYPE_LAMBDA, jc.getClassName(), lambdaMethodName, CommonUtil.argumentList(method.getArgumentTypes()));
+                methodCalls.add(lambdaMethodCall);
+                break;
+            }
+        }
+    }
+    // added end
 }
