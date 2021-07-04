@@ -15,6 +15,7 @@ public class Constants {
     public static final String CALL_TYPE_INTERFACE = "ITF";
     public static final String CALL_TYPE_LAMBDA = "LM";
     public static final String CALL_TYPE_RUNNABLE_INIT_RUN = "RIR";
+    public static final String CALL_TYPE_THREAD_INIT_RUN = "TIR";
     public static final String CALL_TYPE_SUPER_CALL_CHILD = "SCC";
     public static final String CALL_TYPE_CHILD_CALL_SUPER = "CCS";
 

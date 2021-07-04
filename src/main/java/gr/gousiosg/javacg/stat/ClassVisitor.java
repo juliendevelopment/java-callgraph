@@ -54,16 +54,18 @@ public class ClassVisitor extends EmptyVisitor {
     // added by adrninistrator
     private Map<String, Set<String>> calleeMethodMap;
     private Map<String, Boolean> runnableImplClassMap;
+    private Map<String, Boolean> threadChildClassMap;
     private Map<String, Set<String>> methodAnnotationMap;
     // added end
 
     public ClassVisitor(JavaClass jc, Map<String, Set<String>> calleeMethodMap, Map<String, Boolean> runnableImplClassMap,
-                        Map<String, Set<String>> methodAnnotationMap) {
+                        Map<String, Boolean> threadChildClassMap, Map<String, Set<String>> methodAnnotationMap) {
         clazz = jc;
         constants = new ConstantPoolGen(clazz.getConstantPool());
         classReferenceFormat = "C:" + clazz.getClassName() + " %s";
         this.calleeMethodMap = calleeMethodMap;
         this.runnableImplClassMap = runnableImplClassMap;
+        this.threadChildClassMap = threadChildClassMap;
         this.methodAnnotationMap = methodAnnotationMap;
     }
 
@@ -94,8 +96,8 @@ public class ClassVisitor extends EmptyVisitor {
             if (constant == null)
                 continue;
             if (constant.getTag() == 7) {
-                String referencedClass = 
-                    constantPool.constantToString(constant);
+                String referencedClass =
+                        constantPool.constantToString(constant);
 
                 // modified by adrninistrator
                 methodCalls.add(String.format(classReferenceFormat, referencedClass));
@@ -107,7 +109,7 @@ public class ClassVisitor extends EmptyVisitor {
     @Override
     public void visitMethod(Method method) {
         MethodGen mg = new MethodGen(method, clazz.getClassName(), constants);
-        MethodVisitor visitor = new MethodVisitor(mg, clazz, calleeMethodMap, runnableImplClassMap, methodAnnotationMap);
+        MethodVisitor visitor = new MethodVisitor(mg, clazz, calleeMethodMap, runnableImplClassMap, threadChildClassMap, methodAnnotationMap);
         methodCalls.addAll(visitor.start());
     }
 
@@ -122,7 +124,7 @@ public class ClassVisitor extends EmptyVisitor {
 
     // added by adrninistrator
     // record lambda method call
-    private void recordLambdaMethodCall(Set<String> lambdaMethodNameSet,JavaClass jc,Method origMethod) {
+    private void recordLambdaMethodCall(Set<String> lambdaMethodNameSet, JavaClass jc, Method origMethod) {
         if (lambdaMethodNameSet.isEmpty()) {
             return;
         }

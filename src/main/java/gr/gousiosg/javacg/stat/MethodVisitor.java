@@ -52,11 +52,12 @@ public class MethodVisitor extends EmptyVisitor {
     // added by adrninistrator
     private Map<String, Set<String>> calleeMethodMap;
     private Map<String, Boolean> runnableImplClassMap;
+    private Map<String, Boolean> threadChildClassMap;
     private Map<String, Set<String>> methodAnnotationMap;
     // added end
 
     public MethodVisitor(MethodGen m, JavaClass jc, Map<String, Set<String>> calleeMethodMap, Map<String, Boolean> runnableImplClassMap,
-                         Map<String, Set<String>> methodAnnotationMap) {
+                         Map<String, Boolean> threadChildClassMap, Map<String, Set<String>> methodAnnotationMap) {
         visitedClass = jc;
         mg = m;
         cp = mg.getConstantPool();
@@ -64,6 +65,7 @@ public class MethodVisitor extends EmptyVisitor {
         // modified by adrninistrator
         this.calleeMethodMap = calleeMethodMap;
         this.runnableImplClassMap = runnableImplClassMap;
+        this.threadChildClassMap = threadChildClassMap;
         this.methodAnnotationMap = methodAnnotationMap;
 
         String fullMethod = visitedClass.getClassName() + ":" + mg.getName() + CommonUtil.argumentList(mg.getArgumentTypes());
@@ -163,27 +165,45 @@ public class MethodVisitor extends EmptyVisitor {
 
         boolean skipRawMethodCall = false;
 
-        // add Runnable impl classes
         if ("<init>".equals(calleeMethodName)) {
-            Boolean recorded = runnableImplClassMap.get(calleeClassName);
-            if (recorded != null) {
+            // handle Runnable impl classes
+            Boolean recordedRunnableImpl = runnableImplClassMap.get(calleeClassName);
+            if (recordedRunnableImpl != null) {
                 // do not record original call type
                 skipRawMethodCall = true;
                 // other function call runnable impl class <init>
                 methodCalls.add(String.format(format, Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs));
+
+                if (Boolean.FALSE.equals(recordedRunnableImpl)) {
+                    // runnable impl class <init> call runnable impl class run()
+                    String runnableImplClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
+                            Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName);
+                    methodCalls.add(runnableImplClassMethod);
+
+                    runnableImplClassMap.put(calleeClassName, Boolean.TRUE);
+                }
             }
 
-            if(Boolean.FALSE.equals(recorded)){
-                // call runnable impl class <init> call runnable impl class run()
-                String runnableImplClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
-                        Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName);
-                methodCalls.add(runnableImplClassMethod);
+            // handle Thread child classes
+            Boolean recordedThreadChildClass = threadChildClassMap.get(calleeClassName);
+            if (recordedThreadChildClass != null) {
+                // do not record original call type
+                skipRawMethodCall = true;
+                // other function call thread child class <init>
+                methodCalls.add(String.format(format, Constants.CALL_TYPE_THREAD_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs));
 
-                runnableImplClassMap.put(calleeClassName, Boolean.TRUE);
+                if (Boolean.FALSE.equals(recordedThreadChildClass)) {
+                    // thread child class <init> call thread child class run()
+                    String threadChildClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
+                            Constants.CALL_TYPE_THREAD_INIT_RUN, calleeClassName);
+                    methodCalls.add(threadChildClassMethod);
+
+                    threadChildClassMap.put(calleeClassName, Boolean.TRUE);
+                }
             }
         }
 
-        if(skipRawMethodCall) {
+        if (skipRawMethodCall) {
             return;
         }
 

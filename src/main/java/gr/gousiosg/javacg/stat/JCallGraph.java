@@ -58,6 +58,7 @@ public class JCallGraph {
     private static Map<String, ClassInterfaceMethodInfo> classInterfaceMethodInfoMap;
     private static Map<String, List<String>> interfaceMethodWithArgsMap;
     private static Map<String, Boolean> runnableImplClassMap;
+    private static Map<String, Boolean> threadChildClassMap;
     private static Map<String, Set<String>> methodAnnotationMap;
     private static Set<String> extendsClassesSet;
     private static Map<String, ExtendsClassMethodInfo> extendsClassMethodInfoMap;
@@ -65,6 +66,7 @@ public class JCallGraph {
     private static Map<String, Integer> childrenClassIndexMap;
 
     private static final String RUNNABLE_CLASS_NAME = Runnable.class.getName();
+    private static final String THREAD_CLASS_NAME = Thread.class.getName();
     // added end
 
     public static void main(String[] args) {
@@ -113,7 +115,8 @@ public class JCallGraph {
                                 findExtendsClassesInfo(javaClass);
                             }
 
-                            ClassVisitor classVisitor = new ClassVisitor(javaClass, calleeMethodMap, runnableImplClassMap, methodAnnotationMap);
+                            ClassVisitor classVisitor = new ClassVisitor(javaClass, calleeMethodMap, runnableImplClassMap, threadChildClassMap,
+                                    methodAnnotationMap);
                             classVisitor.start();
                             List<String> methodCalls = classVisitor.methodCalls();
                             for (String methodCall : methodCalls) {
@@ -157,6 +160,7 @@ public class JCallGraph {
         classInterfaceMethodInfoMap = new HashMap<>(INIT_SIZE_100);
         interfaceMethodWithArgsMap = new HashMap<>(INIT_SIZE_100);
         runnableImplClassMap = new HashMap<>(INIT_SIZE_100);
+        threadChildClassMap = new HashMap<>(INIT_SIZE_100);
         methodAnnotationMap = new HashMap<>(INIT_SIZE_100);
         extendsClassesSet = new HashSet<>(INIT_SIZE_500);
         extendsClassMethodInfoMap = new HashMap<>(INIT_SIZE_500);
@@ -433,6 +437,11 @@ public class JCallGraph {
 
                     // get super and children class
                     String superClassName = javaClass.getSuperclassName();
+                    if (THREAD_CLASS_NAME.equals(superClassName)) {
+                        // find Thread child class
+                        threadChildClassMap.put(javaClass.getClassName(), Boolean.FALSE);
+                    }
+
                     if (!superClassName.startsWith("java.")) {
                         extendsClassesSet.add(javaClass.getClassName());
                         extendsClassesSet.add(superClassName);
