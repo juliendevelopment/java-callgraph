@@ -1,3 +1,25 @@
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.adrninistrator/java-callgraph.svg)](https://search.maven.org/artifact/com.github.adrninistrator/java-callgraph/)
+
+编译命令：
+
+```
+gradlew jar
+```
+
+执行参数：
+
+VM options: 用于指定输出文件路径
+
+```
+-Doutput.file=a.txt
+```
+
+Program arguments:用于指定需要解析的jar包路径列表
+
+```
+build/libs/a.jar build/libs/b.jar
+```
+
 java-callgraph: Java Call Graph Utilities
 =========================================
 
