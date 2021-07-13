@@ -29,7 +29,10 @@
 package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
-import gr.gousiosg.javacg.dto.*;
+import gr.gousiosg.javacg.dto.ClassInterfaceMethodInfo;
+import gr.gousiosg.javacg.dto.ExtendsClassMethodInfo;
+import gr.gousiosg.javacg.dto.MethodAttribute;
+import gr.gousiosg.javacg.dto.TmpNode4ExtendsClassMethod;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.ClassParser;
 import org.apache.bcel.classfile.JavaClass;
@@ -62,8 +65,7 @@ public class JCallGraph {
     private static Map<String, Set<String>> methodAnnotationMap;
     private static Set<String> extendsClassesSet;
     private static Map<String, ExtendsClassMethodInfo> extendsClassMethodInfoMap;
-    private static List<ChildrenClassInfo> childrenClassInfoList;
-    private static Map<String, Integer> childrenClassIndexMap;
+    private static Map<String, List<String>> childrenClassInfoMap;
 
     private static final String RUNNABLE_CLASS_NAME = Runnable.class.getName();
     private static final String THREAD_CLASS_NAME = Thread.class.getName();
@@ -164,14 +166,13 @@ public class JCallGraph {
         methodAnnotationMap = new HashMap<>(INIT_SIZE_100);
         extendsClassesSet = new HashSet<>(INIT_SIZE_500);
         extendsClassMethodInfoMap = new HashMap<>(INIT_SIZE_500);
-        childrenClassInfoList = new ArrayList<>(INIT_SIZE_500);
-        childrenClassIndexMap = new HashMap<>(INIT_SIZE_500);
+        childrenClassInfoMap = new HashMap<>(INIT_SIZE_500);
     }
 
     // add abstract method in interface into abstract super class
     private static boolean addInterfaceMethod4SuperClass() {
-        for (ChildrenClassInfo childrenClassInfo : childrenClassInfoList) {
-            String superClassName = childrenClassInfo.getSuperClassName();
+        for (Map.Entry<String, List<String>> childrenClassInfoEntry : childrenClassInfoMap.entrySet()) {
+            String superClassName = childrenClassInfoEntry.getKey();
             ExtendsClassMethodInfo extendsClassMethodInfo = extendsClassMethodInfoMap.get(superClassName);
             if (extendsClassMethodInfo == null) {
                 // class in other jar can be found, but can't find its methods
@@ -247,27 +248,23 @@ public class JCallGraph {
         // begin loop
         while (true) {
             TmpNode4ExtendsClassMethod currentNode = tmpNodeList.get(currentLevel);
-
-            Integer currentSuperClassIndex = childrenClassIndexMap.get(currentNode.getSuperClassName());
-            if (currentSuperClassIndex == null) {
+            List<String> childrenClassInfoList = childrenClassInfoMap.get(currentNode.getSuperClassName());
+            if (childrenClassInfoList == null) {
                 System.err.println("can't find top super class: " + currentNode.getSuperClassName());
                 return false;
             }
 
-            ChildrenClassInfo childrenClassInfo = childrenClassInfoList.get(currentSuperClassIndex.intValue());
-
             int currentChildClassIndex = currentNode.getChildClassIndex() + 1;
-            if (currentChildClassIndex >= childrenClassInfo.getChildrenClassNameList().size()) {
+            if (currentChildClassIndex >= childrenClassInfoList.size()) {
                 if (currentLevel == 0) {
                     return true;
                 }
                 currentLevel--;
                 continue;
-
             }
 
             // handle current child class
-            String childClassName = childrenClassInfo.getChildrenClassNameList().get(currentChildClassIndex);
+            String childClassName = childrenClassInfoList.get(currentChildClassIndex);
 
             // handle super and child class call method
             if (!handleSuperAndChildClass(currentNode.getSuperClassName(), childClassName, log)) {
@@ -277,8 +274,8 @@ public class JCallGraph {
             // handle next child class
             currentNode.setChildClassIndex(currentChildClassIndex);
 
-            Integer nextChildClassIndex = childrenClassIndexMap.get(childClassName);
-            if (nextChildClassIndex == null) {
+            List<String> nextChildClassList = childrenClassInfoMap.get(childClassName);
+            if (nextChildClassList == null) {
                 // current child has no child
                 continue;
             }
@@ -491,19 +488,13 @@ public class JCallGraph {
         String superClassName = javaClass.getSuperclassName();
         if (!superClassName.startsWith("java.")) {
             // cache super class and it's children class, ignore super class start with "java."
-            Integer elementInListIndex = childrenClassIndexMap.get(superClassName);
-            if (elementInListIndex == null) {
-                List<String> childrenClassNameList = new ArrayList<>();
-                childrenClassNameList.add(className);
-
-                ChildrenClassInfo childrenClassInfo = new ChildrenClassInfo();
-                childrenClassInfo.setSuperClassName(superClassName);
-                childrenClassInfo.setChildrenClassNameList(childrenClassNameList);
-                childrenClassInfoList.add(childrenClassInfo);
-
-                childrenClassIndexMap.put(superClassName, childrenClassInfoList.size() - 1);
+            List<String> childrenClassInfoList = childrenClassInfoMap.get(superClassName);
+            if (childrenClassInfoList == null) {
+                List<String> newChildrenClassInfoList = new ArrayList<>();
+                newChildrenClassInfoList.add(className);
+                childrenClassInfoMap.put(superClassName, newChildrenClassInfoList);
             } else {
-                childrenClassInfoList.get(elementInListIndex).getChildrenClassNameList().add(className);
+                childrenClassInfoList.add(className);
             }
         }
 
