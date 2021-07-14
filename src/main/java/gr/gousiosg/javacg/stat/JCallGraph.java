@@ -340,9 +340,9 @@ public class JCallGraph {
                 childMethodAttributeMap.put(superMethodWithArgs, superMethodAttribute);
 
                 // add child class call super class method
-                String superCallChildClassMethod = String.format("M:%s:%s (%s)%s:%s", childClassName, superMethodWithArgs,
+                String childCallSuperClassMethod = String.format("M:%s:%s (%s)%s:%s", childClassName, superMethodWithArgs,
                         Constants.CALL_TYPE_CHILD_CALL_SUPER, superClassName, superMethodWithArgs) + "\n";
-                log.write(superCallChildClassMethod);
+                log.write(childCallSuperClassMethod);
             }
         }
         return true;
