@@ -57,7 +57,7 @@ public class JCallGraph {
     public static final int INIT_SIZE_1000 = 1000;
 
     // added by adrninistrator
-    private static Map<String, Set<String>> calleeMethodMap;
+    private static Map<String, Set<String>> calleeMethodMapGlobal;
     private static Map<String, ClassInterfaceMethodInfo> classInterfaceMethodInfoMap;
     private static Map<String, List<String>> interfaceMethodWithArgsMap;
     private static Map<String, Boolean> runnableImplClassMap;
@@ -117,7 +117,7 @@ public class JCallGraph {
                                 findExtendsClassesInfo(javaClass);
                             }
 
-                            ClassVisitor classVisitor = new ClassVisitor(javaClass, calleeMethodMap, runnableImplClassMap, threadChildClassMap,
+                            ClassVisitor classVisitor = new ClassVisitor(javaClass, calleeMethodMapGlobal, runnableImplClassMap, threadChildClassMap,
                                     methodAnnotationMap);
                             classVisitor.start();
                             List<String> methodCalls = classVisitor.methodCalls();
@@ -158,7 +158,10 @@ public class JCallGraph {
 
     // added by adrninistrator
     private static void init() {
-        calleeMethodMap = new HashMap<>(INIT_SIZE_1000);
+        // calleeMethodMapGlobal used for all jar files, only initialize once
+        if (calleeMethodMapGlobal == null) {
+            calleeMethodMapGlobal = new HashMap<>(INIT_SIZE_1000);
+        }
         classInterfaceMethodInfoMap = new HashMap<>(INIT_SIZE_100);
         interfaceMethodWithArgsMap = new HashMap<>(INIT_SIZE_100);
         runnableImplClassMap = new HashMap<>(INIT_SIZE_100);
@@ -331,7 +334,7 @@ public class JCallGraph {
                 if (childMethodAttributeMap.get(superMethodWithArgs) != null) {
                     continue;
                 }
-                Set<String> childCalleeMethodWithArgsSet = calleeMethodMap.get(childClassName);
+                Set<String> childCalleeMethodWithArgsSet = calleeMethodMapGlobal.get(childClassName);
                 if (!childClassMethodInfo.isAbstractClass() &&
                         (childCalleeMethodWithArgsSet == null || !childCalleeMethodWithArgsSet.contains(superMethodWithArgs))) {
                     continue;
@@ -364,7 +367,7 @@ public class JCallGraph {
                 and the method should be used
              */
             for (String interfaceName : interfaceNameList) {
-                Set<String> calleeMethodWithArgsSet = calleeMethodMap.get(interfaceName);
+                Set<String> calleeMethodWithArgsSet = calleeMethodMapGlobal.get(interfaceName);
                 if (calleeMethodWithArgsSet == null) {
                     continue;
                 }
