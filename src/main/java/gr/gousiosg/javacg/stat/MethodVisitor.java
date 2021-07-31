@@ -29,8 +29,10 @@
 package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
+import gr.gousiosg.javacg.dto.MethodCallDto;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.JavaClass;
+import org.apache.bcel.classfile.LineNumberTable;
 import org.apache.bcel.generic.*;
 
 import java.util.*;
@@ -47,27 +49,51 @@ public class MethodVisitor extends EmptyVisitor {
     private MethodGen mg;
     private ConstantPoolGen cp;
     private String format;
-    private List<String> methodCalls = new ArrayList<>();
+    // modified by adrninistrator
+    private List<MethodCallDto> methodCalls = new ArrayList<>();
+    // modified end
 
     // added by adrninistrator
+    private LineNumberTable lineNumberTable;
     private Map<String, Set<String>> calleeMethodMap;
     private Map<String, Boolean> runnableImplClassMap;
+    private Map<String, Boolean> callableImplClassMap;
     private Map<String, Boolean> threadChildClassMap;
     private Map<String, Set<String>> methodAnnotationMap;
+    private int ihPosition;
     // added end
 
-    public MethodVisitor(MethodGen m, JavaClass jc, Map<String, Set<String>> calleeMethodMap, Map<String, Boolean> runnableImplClassMap,
-                         Map<String, Boolean> threadChildClassMap, Map<String, Set<String>> methodAnnotationMap) {
+    public MethodVisitor(MethodGen m, JavaClass jc) {
         visitedClass = jc;
         mg = m;
         cp = mg.getConstantPool();
 
         // modified by adrninistrator
-        this.calleeMethodMap = calleeMethodMap;
-        this.runnableImplClassMap = runnableImplClassMap;
-        this.threadChildClassMap = threadChildClassMap;
-        this.methodAnnotationMap = methodAnnotationMap;
+        lineNumberTable = mg.getLineNumberTable(cp);
+    }
 
+    // added by adrninistrator
+    public void setCalleeMethodMap(Map<String, Set<String>> calleeMethodMap) {
+        this.calleeMethodMap = calleeMethodMap;
+    }
+
+    public void setRunnableImplClassMap(Map<String, Boolean> runnableImplClassMap) {
+        this.runnableImplClassMap = runnableImplClassMap;
+    }
+
+    public void setCallableImplClassMap(Map<String, Boolean> callableImplClassMap) {
+        this.callableImplClassMap = callableImplClassMap;
+    }
+
+    public void setThreadChildClassMap(Map<String, Boolean> threadChildClassMap) {
+        this.threadChildClassMap = threadChildClassMap;
+    }
+
+    public void setMethodAnnotationMap(Map<String, Set<String>> methodAnnotationMap) {
+        this.methodAnnotationMap = methodAnnotationMap;
+    }
+
+    public void beforeStart() {
         String fullMethod = visitedClass.getClassName() + ":" + mg.getName() + CommonUtil.argumentList(mg.getArgumentTypes());
 
         handleAnnotationName(fullMethod);
@@ -75,7 +101,6 @@ public class MethodVisitor extends EmptyVisitor {
         format = "M:" + fullMethod + " " + "(%s)%s:%s%s";
     }
 
-    // added by adrninistrator
     private void handleAnnotationName(String fullMethod) {
         AnnotationEntryGen[] annotationEntryGens = mg.getAnnotationEntries();
         if (annotationEntryGens == null || annotationEntryGens.length == 0) {
@@ -106,12 +131,15 @@ public class MethodVisitor extends EmptyVisitor {
     }
     // added end
 
-    public List<String> start() {
+    public List<MethodCallDto> start() {
         if (mg.isAbstract() || mg.isNative())
             return Collections.emptyList();
 
         for (InstructionHandle ih = mg.getInstructionList().getStart();
              ih != null; ih = ih.getNext()) {
+            // added by adrninistrator
+            ihPosition = ih.getPosition();
+            // added end
             Instruction i = ih.getInstruction();
 
             if (!visitInstruction(i))
@@ -154,7 +182,6 @@ public class MethodVisitor extends EmptyVisitor {
 
     // added by adrninistrator
     private void addMethodCalls(String type, String calleeClassName, String calleeMethodName, String calleeMethodArgs) {
-
         // add callee method info
         Set<String> calleeMethodWithArgsSet = calleeMethodMap.get(calleeClassName);
         if (calleeMethodWithArgsSet == null) {
@@ -165,41 +192,59 @@ public class MethodVisitor extends EmptyVisitor {
 
         boolean skipRawMethodCall = false;
 
-        if ("<init>".equals(calleeMethodName)) {
+        if (Constants.METHOD_NAME_INIT.equals(calleeMethodName)) {
             // handle Runnable impl classes
-            Boolean recordedRunnableImpl = runnableImplClassMap.get(calleeClassName);
-            if (recordedRunnableImpl != null) {
+            Boolean recordedRunnable = runnableImplClassMap.get(calleeClassName);
+            if (recordedRunnable != null) {
                 // do not record original call type
                 skipRawMethodCall = true;
                 // other function call runnable impl class <init>
-                methodCalls.add(String.format(format, Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs));
+                String methodCall = String.format(format, Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs);
+                MethodCallDto methodCallDto1 = MethodCallDto.genInstance(methodCall, getSourceLine());
+                methodCalls.add(methodCallDto1);
 
-                if (Boolean.FALSE.equals(recordedRunnableImpl)) {
+                if (Boolean.FALSE.equals(recordedRunnable)) {
                     // runnable impl class <init> call runnable impl class run()
                     String runnableImplClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
                             Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName);
-                    methodCalls.add(runnableImplClassMethod);
+                    MethodCallDto methodCallDto2 = MethodCallDto.genInstance(runnableImplClassMethod, Constants.DEFAULT_LINE_NUMBER);
+                    methodCalls.add(methodCallDto2);
 
                     runnableImplClassMap.put(calleeClassName, Boolean.TRUE);
                 }
             }
 
-            // handle Thread child classes
-            Boolean recordedThreadChildClass = threadChildClassMap.get(calleeClassName);
-            if (recordedThreadChildClass != null) {
+            // handle Callable impl classes
+            Boolean recordedCallable = callableImplClassMap.get(calleeClassName);
+            if (recordedCallable != null) {
                 // do not record original call type
                 skipRawMethodCall = true;
-                // other function call thread child class <init>
-                methodCalls.add(String.format(format, Constants.CALL_TYPE_THREAD_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs));
+                // other function call callable impl class <init>
+                String methodCall = String.format(format, Constants.CALL_TYPE_CALLABLE_INIT_CALL, calleeClassName, calleeMethodName,
+                        calleeMethodArgs);
+                MethodCallDto methodCallDto1 = MethodCallDto.genInstance(methodCall, getSourceLine());
+                methodCalls.add(methodCallDto1);
 
-                if (Boolean.FALSE.equals(recordedThreadChildClass)) {
-                    // thread child class <init> call thread child class run()
-                    String threadChildClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
-                            Constants.CALL_TYPE_THREAD_INIT_RUN, calleeClassName);
-                    methodCalls.add(threadChildClassMethod);
+                if (Boolean.FALSE.equals(recordedCallable)) {
+                    // callable impl class <init> call callable impl class call()
+                    String callableImplClassMethod = String.format("M:%s:%s%s (%s)%s:call()", calleeClassName, calleeMethodName, calleeMethodArgs,
+                            Constants.CALL_TYPE_CALLABLE_INIT_CALL, calleeClassName);
+                    MethodCallDto methodCallDto2 = MethodCallDto.genInstance(callableImplClassMethod, Constants.DEFAULT_LINE_NUMBER);
+                    methodCalls.add(methodCallDto2);
 
-                    threadChildClassMap.put(calleeClassName, Boolean.TRUE);
+                    callableImplClassMap.put(calleeClassName, Boolean.TRUE);
                 }
+            }
+        } else if (Constants.METHOD_NAME_START.equals(calleeMethodName) && "()".equals(calleeMethodArgs)) {
+            // handle Thread child classes
+            if (Boolean.FALSE.equals(threadChildClassMap.get(calleeClassName))) {
+                // thread child class start() call run()
+                String threadChildClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
+                        Constants.CALL_TYPE_THREAD_START_RUN, calleeClassName);
+                MethodCallDto methodCallDto2 = MethodCallDto.genInstance(threadChildClassMethod, Constants.DEFAULT_LINE_NUMBER);
+                methodCalls.add(methodCallDto2);
+
+                threadChildClassMap.put(calleeClassName, Boolean.TRUE);
             }
         }
 
@@ -207,7 +252,16 @@ public class MethodVisitor extends EmptyVisitor {
             return;
         }
 
-        methodCalls.add(String.format(format, type, calleeClassName, calleeMethodName, calleeMethodArgs));
+        String methodCall = String.format(format, type, calleeClassName, calleeMethodName, calleeMethodArgs);
+        MethodCallDto methodCallDto = MethodCallDto.genInstance(methodCall, getSourceLine());
+        methodCalls.add(methodCallDto);
+    }
+
+    private int getSourceLine() {
+        if (lineNumberTable == null) {
+            return Constants.DEFAULT_LINE_NUMBER;
+        }
+        return lineNumberTable.getSourceLine(ihPosition);
     }
     // added end
 }

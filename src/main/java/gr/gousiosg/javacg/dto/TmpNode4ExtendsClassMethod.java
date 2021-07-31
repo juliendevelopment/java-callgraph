@@ -12,7 +12,7 @@ public class TmpNode4ExtendsClassMethod {
 
     private int childClassIndex;
 
-    public static TmpNode4ExtendsClassMethod genNode(String superClassName, int childClassIndex) {
+    public static TmpNode4ExtendsClassMethod genInstance(String superClassName, int childClassIndex) {
         TmpNode4ExtendsClassMethod tmpNode = new TmpNode4ExtendsClassMethod();
         tmpNode.setSuperClassName(superClassName);
         tmpNode.setChildClassIndex(childClassIndex);

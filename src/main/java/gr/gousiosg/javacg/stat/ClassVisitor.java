@@ -29,6 +29,7 @@
 package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
+import gr.gousiosg.javacg.dto.MethodCallDto;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.*;
 import org.apache.bcel.generic.ConstantPoolGen;
@@ -49,24 +50,22 @@ public class ClassVisitor extends EmptyVisitor {
     private ConstantPoolGen constants;
     private String classReferenceFormat;
     private final DynamicCallManager DCManager = new DynamicCallManager();
-    private List<String> methodCalls = new ArrayList<>();
+    // modified by adrninistrator
+    private List<MethodCallDto> methodCalls = new ArrayList<>();
+    // modified end
 
     // added by adrninistrator
     private Map<String, Set<String>> calleeMethodMap;
     private Map<String, Boolean> runnableImplClassMap;
+    private Map<String, Boolean> callableImplClassMap;
     private Map<String, Boolean> threadChildClassMap;
     private Map<String, Set<String>> methodAnnotationMap;
     // added end
 
-    public ClassVisitor(JavaClass jc, Map<String, Set<String>> calleeMethodMap, Map<String, Boolean> runnableImplClassMap,
-                        Map<String, Boolean> threadChildClassMap, Map<String, Set<String>> methodAnnotationMap) {
+    public ClassVisitor(JavaClass jc) {
         clazz = jc;
         constants = new ConstantPoolGen(clazz.getConstantPool());
         classReferenceFormat = "C:" + clazz.getClassName() + " %s";
-        this.calleeMethodMap = calleeMethodMap;
-        this.runnableImplClassMap = runnableImplClassMap;
-        this.threadChildClassMap = threadChildClassMap;
-        this.methodAnnotationMap = methodAnnotationMap;
     }
 
     @Override
@@ -100,7 +99,9 @@ public class ClassVisitor extends EmptyVisitor {
                         constantPool.constantToString(constant);
 
                 // modified by adrninistrator
-                methodCalls.add(String.format(classReferenceFormat, referencedClass));
+                MethodCallDto methodCallDto = MethodCallDto.genInstance(String.format(classReferenceFormat, referencedClass),
+                        Constants.NONE_LINE_NUMBER);
+                methodCalls.add(methodCallDto);
                 // modified end
             }
         }
@@ -109,8 +110,15 @@ public class ClassVisitor extends EmptyVisitor {
     @Override
     public void visitMethod(Method method) {
         MethodGen mg = new MethodGen(method, clazz.getClassName(), constants);
-        MethodVisitor visitor = new MethodVisitor(mg, clazz, calleeMethodMap, runnableImplClassMap, threadChildClassMap, methodAnnotationMap);
-        methodCalls.addAll(visitor.start());
+        MethodVisitor visitor = new MethodVisitor(mg, clazz);
+        visitor.setCalleeMethodMap(calleeMethodMap);
+        visitor.setRunnableImplClassMap(runnableImplClassMap);
+        visitor.setCallableImplClassMap(callableImplClassMap);
+        visitor.setThreadChildClassMap(threadChildClassMap);
+        visitor.setMethodAnnotationMap(methodAnnotationMap);
+        visitor.beforeStart();
+        List<MethodCallDto> methodCallDtos = visitor.start();
+        methodCalls.addAll(methodCallDtos);
     }
 
     public ClassVisitor start() {
@@ -118,11 +126,31 @@ public class ClassVisitor extends EmptyVisitor {
         return this;
     }
 
-    public List<String> methodCalls() {
+    public List<MethodCallDto> methodCalls() {
         return this.methodCalls;
     }
 
     // added by adrninistrator
+    public void setCalleeMethodMap(Map<String, Set<String>> calleeMethodMap) {
+        this.calleeMethodMap = calleeMethodMap;
+    }
+
+    public void setRunnableImplClassMap(Map<String, Boolean> runnableImplClassMap) {
+        this.runnableImplClassMap = runnableImplClassMap;
+    }
+
+    public void setCallableImplClassMap(Map<String, Boolean> callableImplClassMap) {
+        this.callableImplClassMap = callableImplClassMap;
+    }
+
+    public void setThreadChildClassMap(Map<String, Boolean> threadChildClassMap) {
+        this.threadChildClassMap = threadChildClassMap;
+    }
+
+    public void setMethodAnnotationMap(Map<String, Set<String>> methodAnnotationMap) {
+        this.methodAnnotationMap = methodAnnotationMap;
+    }
+
     // record lambda method call
     private void recordLambdaMethodCall(Set<String> lambdaMethodNameSet, JavaClass jc, Method origMethod) {
         if (lambdaMethodNameSet.isEmpty()) {
@@ -137,10 +165,13 @@ public class ClassVisitor extends EmptyVisitor {
                 String lambdaMethodCall = String.format("M:%s:%s%s (%s)%s:%s%s", jc.getClassName(), origMethod.getName(),
                         CommonUtil.argumentList(origMethod.getArgumentTypes()),
                         Constants.CALL_TYPE_LAMBDA, jc.getClassName(), lambdaMethodName, CommonUtil.argumentList(method.getArgumentTypes()));
-                methodCalls.add(lambdaMethodCall);
+
+                MethodCallDto methodCallDto = MethodCallDto.genInstance(lambdaMethodCall, Constants.DEFAULT_LINE_NUMBER);
+                methodCalls.add(methodCallDto);
                 break;
             }
         }
     }
+
     // added end
 }

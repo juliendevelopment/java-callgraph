@@ -29,10 +29,7 @@
 package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
-import gr.gousiosg.javacg.dto.ClassInterfaceMethodInfo;
-import gr.gousiosg.javacg.dto.ExtendsClassMethodInfo;
-import gr.gousiosg.javacg.dto.MethodAttribute;
-import gr.gousiosg.javacg.dto.TmpNode4ExtendsClassMethod;
+import gr.gousiosg.javacg.dto.*;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.ClassParser;
 import org.apache.bcel.classfile.JavaClass;
@@ -41,6 +38,7 @@ import org.apache.bcel.classfile.Method;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -61,6 +59,7 @@ public class JCallGraph {
     private static Map<String, ClassInterfaceMethodInfo> classInterfaceMethodInfoMap;
     private static Map<String, List<String>> interfaceMethodWithArgsMap;
     private static Map<String, Boolean> runnableImplClassMap;
+    private static Map<String, Boolean> callableImplClassMap;
     private static Map<String, Boolean> threadChildClassMap;
     private static Map<String, Set<String>> methodAnnotationMap;
     private static Set<String> extendsClassesSet;
@@ -68,6 +67,7 @@ public class JCallGraph {
     private static Map<String, List<String>> childrenClassInfoMap;
 
     private static final String RUNNABLE_CLASS_NAME = Runnable.class.getName();
+    private static final String CALLABLE_CLASS_NAME = Callable.class.getName();
     private static final String THREAD_CLASS_NAME = Thread.class.getName();
     // added end
 
@@ -86,7 +86,7 @@ public class JCallGraph {
         // added end
 
         // modified by adrninistrator
-        try (BufferedWriter log = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File(outputFilePath))));) {
+        try (BufferedWriter resultWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File(outputFilePath))));) {
             for (String arg : args) {
                 System.out.println("handle jar file: " + arg);
                 File f = new File(arg);
@@ -117,13 +117,24 @@ public class JCallGraph {
                                 findExtendsClassesInfo(javaClass);
                             }
 
-                            ClassVisitor classVisitor = new ClassVisitor(javaClass, calleeMethodMapGlobal, runnableImplClassMap, threadChildClassMap,
-                                    methodAnnotationMap);
+                            ClassVisitor classVisitor = new ClassVisitor(javaClass);
+                            classVisitor.setCalleeMethodMap(calleeMethodMapGlobal);
+                            classVisitor.setRunnableImplClassMap(runnableImplClassMap);
+                            classVisitor.setCallableImplClassMap(callableImplClassMap);
+                            classVisitor.setThreadChildClassMap(threadChildClassMap);
+                            classVisitor.setMethodAnnotationMap(methodAnnotationMap);
                             classVisitor.start();
-                            List<String> methodCalls = classVisitor.methodCalls();
-                            for (String methodCall : methodCalls) {
-                                log.write(methodCall + "\n");
+
+                            // modified by adrninistrator
+                            List<MethodCallDto> methodCalls = classVisitor.methodCalls();
+                            for (MethodCallDto methodCallDto : methodCalls) {
+                                writeResult(resultWriter, methodCallDto.getMethodCall());
+                                if (methodCallDto.getSourceLine() != Constants.NONE_LINE_NUMBER) {
+                                    writeResult(resultWriter, " " + methodCallDto.getSourceLine());
+                                }
+                                writeResult(resultWriter, Constants.NEW_LINE);
                             }
+                            // modified end
                         }
                     }
 
@@ -134,12 +145,12 @@ public class JCallGraph {
                     }
 
                     // record super class call children method and child class call super method
-                    if (!recordExtendsClassMethod(log)) {
+                    if (!recordExtendsClassMethod(resultWriter)) {
                         return false;
                     }
 
                     // record interface call implementation class method
-                    recordInterfaceCallClassMethod(log);
+                    recordInterfaceCallClassMethod(resultWriter);
 
                     // record method annotation information
                     recordMethodAnnotationInfo(outputFilePath);
@@ -165,6 +176,7 @@ public class JCallGraph {
         classInterfaceMethodInfoMap = new HashMap<>(INIT_SIZE_100);
         interfaceMethodWithArgsMap = new HashMap<>(INIT_SIZE_100);
         runnableImplClassMap = new HashMap<>(INIT_SIZE_100);
+        callableImplClassMap = new HashMap<>(INIT_SIZE_100);
         threadChildClassMap = new HashMap<>(INIT_SIZE_100);
         methodAnnotationMap = new HashMap<>(INIT_SIZE_100);
         extendsClassesSet = new HashSet<>(INIT_SIZE_500);
@@ -216,7 +228,7 @@ public class JCallGraph {
     }
 
     // record super class call children method and child class call super method
-    private static boolean recordExtendsClassMethod(BufferedWriter log) throws IOException {
+    private static boolean recordExtendsClassMethod(BufferedWriter resultWriter) throws IOException {
         Set<String> topSuperClassNameSet = new HashSet<>();
 
         // get top super class name
@@ -231,7 +243,7 @@ public class JCallGraph {
 
         for (String topSuperClassName : topSuperClassNameSet) {
             // handle one top super class
-            if (!handleOneTopSuperClass(topSuperClassName, log)) {
+            if (!handleOneTopSuperClass(topSuperClassName, resultWriter)) {
                 return false;
             }
         }
@@ -239,13 +251,13 @@ public class JCallGraph {
     }
 
     // handle one top super class
-    private static boolean handleOneTopSuperClass(String topSuperClassName, BufferedWriter log) throws IOException {
+    private static boolean handleOneTopSuperClass(String topSuperClassName, BufferedWriter resultWriter) throws IOException {
         System.out.println("handleOneTopSuperClass: " + topSuperClassName);
         List<TmpNode4ExtendsClassMethod> tmpNodeList = new ArrayList<>();
         int currentLevel = 0;
 
         // init node list
-        TmpNode4ExtendsClassMethod topNode = TmpNode4ExtendsClassMethod.genNode(topSuperClassName, -1);
+        TmpNode4ExtendsClassMethod topNode = TmpNode4ExtendsClassMethod.genInstance(topSuperClassName, -1);
         tmpNodeList.add(topNode);
 
         // begin loop
@@ -270,7 +282,7 @@ public class JCallGraph {
             String childClassName = childrenClassInfoList.get(currentChildClassIndex);
 
             // handle super and child class call method
-            if (!handleSuperAndChildClass(currentNode.getSuperClassName(), childClassName, log)) {
+            if (!handleSuperAndChildClass(currentNode.getSuperClassName(), childClassName, resultWriter)) {
                 return false;
             }
 
@@ -287,7 +299,7 @@ public class JCallGraph {
             currentLevel++;
 
             if (currentLevel + 1 > tmpNodeList.size()) {
-                TmpNode4ExtendsClassMethod nextNode = TmpNode4ExtendsClassMethod.genNode(childClassName, -1);
+                TmpNode4ExtendsClassMethod nextNode = TmpNode4ExtendsClassMethod.genInstance(childClassName, -1);
                 tmpNodeList.add(nextNode);
             } else {
                 TmpNode4ExtendsClassMethod nextNode = tmpNodeList.get(currentLevel);
@@ -298,7 +310,7 @@ public class JCallGraph {
     }
 
     // handle super and child class call method
-    private static boolean handleSuperAndChildClass(String superClassName, String childClassName, BufferedWriter log) throws IOException {
+    private static boolean handleSuperAndChildClass(String superClassName, String childClassName, BufferedWriter resultWriter) throws IOException {
         ExtendsClassMethodInfo superClassMethodInfo = extendsClassMethodInfoMap.get(superClassName);
         if (superClassMethodInfo == null) {
             System.err.println("can't find information for super class: " + superClassName);
@@ -324,9 +336,10 @@ public class JCallGraph {
                     childMethodAttributeMap.put(superMethodWithArgs, superMethodAttribute);
                 }
                 // add super class call child class method
-                String superCallChildClassMethod = String.format("M:%s:%s (%s)%s:%s", superClassName, superMethodWithArgs,
-                        Constants.CALL_TYPE_SUPER_CALL_CHILD, childClassName, superMethodWithArgs) + "\n";
-                log.write(superCallChildClassMethod);
+                String superCallChildClassMethod = String.format("M:%s:%s (%s)%s:%s %d", superClassName, superMethodWithArgs,
+                        Constants.CALL_TYPE_SUPER_CALL_CHILD, childClassName, superMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
+                writeResult(resultWriter, superCallChildClassMethod);
+                writeResult(resultWriter, Constants.NEW_LINE);
                 continue;
             }
             if (superMethodAttribute.isPublicMethod() || superMethodAttribute.isProtectedMethod()) {
@@ -343,16 +356,17 @@ public class JCallGraph {
                 childMethodAttributeMap.put(superMethodWithArgs, superMethodAttribute);
 
                 // add child class call super class method
-                String childCallSuperClassMethod = String.format("M:%s:%s (%s)%s:%s", childClassName, superMethodWithArgs,
-                        Constants.CALL_TYPE_CHILD_CALL_SUPER, superClassName, superMethodWithArgs) + "\n";
-                log.write(childCallSuperClassMethod);
+                String childCallSuperClassMethod = String.format("M:%s:%s (%s)%s:%s %d", childClassName, superMethodWithArgs,
+                        Constants.CALL_TYPE_CHILD_CALL_SUPER, superClassName, superMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
+                writeResult(resultWriter, childCallSuperClassMethod);
+                writeResult(resultWriter, Constants.NEW_LINE);
             }
         }
         return true;
     }
 
     // record interface call implementation class method
-    private static void recordInterfaceCallClassMethod(BufferedWriter log) throws IOException {
+    private static void recordInterfaceCallClassMethod(BufferedWriter resultWriter) throws IOException {
         if (classInterfaceMethodInfoMap.isEmpty() || interfaceMethodWithArgsMap.isEmpty()) {
             return;
         }
@@ -383,9 +397,10 @@ public class JCallGraph {
                         continue;
                     }
 
-                    String interfaceCallClassMethod = String.format("M:%s:%s (%s)%s:%s", interfaceName, classMethodWithArgs,
-                            Constants.CALL_TYPE_INTERFACE, className, classMethodWithArgs) + "\n";
-                    log.write(interfaceCallClassMethod);
+                    String interfaceCallClassMethod = String.format("M:%s:%s (%s)%s:%s %d", interfaceName, classMethodWithArgs,
+                            Constants.CALL_TYPE_INTERFACE, className, classMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
+                    writeResult(resultWriter, interfaceCallClassMethod);
+                    writeResult(resultWriter, Constants.NEW_LINE);
                 }
             }
         }
@@ -475,9 +490,15 @@ public class JCallGraph {
 
             classInterfaceMethodInfoMap.put(className, classInterfaceMethodInfo);
 
-            // find Runnable impl classes
-            if (!javaClass.isAbstract() && interfaceNameList.contains(RUNNABLE_CLASS_NAME)) {
-                runnableImplClassMap.put(className, Boolean.FALSE);
+            if (!javaClass.isAbstract()) {
+                if (interfaceNameList.contains(RUNNABLE_CLASS_NAME)) {
+                    // find Runnable impl classes
+                    runnableImplClassMap.put(className, Boolean.FALSE);
+                }
+                if (interfaceNameList.contains(CALLABLE_CLASS_NAME)) {
+                    // find Callable impl classes
+                    callableImplClassMap.put(className, Boolean.FALSE);
+                }
             }
         }
     }
@@ -540,7 +561,7 @@ public class JCallGraph {
                     String fullMethod = entry.getKey();
                     Set<String> annotationSet = entry.getValue();
                     for (String annotation : annotationSet) {
-                        String methodWithAnnotation = fullMethod + " " + annotation + "\n";
+                        String methodWithAnnotation = fullMethod + " " + annotation + Constants.NEW_LINE;
                         out.write(methodWithAnnotation);
                     }
                 }
@@ -548,6 +569,11 @@ public class JCallGraph {
                 e.printStackTrace();
             }
         }
+    }
+
+    // write data to result file
+    private static void writeResult(BufferedWriter resultWriter, String data) throws IOException {
+        resultWriter.write(data);
     }
     // added end
 }
