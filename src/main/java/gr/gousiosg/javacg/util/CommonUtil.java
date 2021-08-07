@@ -6,6 +6,9 @@ import org.apache.bcel.classfile.LineNumberTable;
 import org.apache.bcel.classfile.Method;
 import org.apache.bcel.generic.Type;
 
+import java.io.File;
+import java.io.IOException;
+
 /**
  * @author adrninistrator
  * @date 2021/6/22
@@ -85,6 +88,15 @@ public class CommonUtil {
         }
 
         return Constants.DEFAULT_LINE_NUMBER;
+    }
+
+    public static String getCanonicalPath(String filePath) {
+        try {
+            return new File(filePath).getCanonicalPath();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     private CommonUtil() {

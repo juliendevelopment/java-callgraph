@@ -30,6 +30,7 @@ package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
 import gr.gousiosg.javacg.dto.MethodCallDto;
+import gr.gousiosg.javacg.enums.CallTypeEnum;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.JavaClass;
 import org.apache.bcel.classfile.LineNumberTable;
@@ -199,14 +200,14 @@ public class MethodVisitor extends EmptyVisitor {
                 // do not record original call type
                 skipRawMethodCall = true;
                 // other function call runnable impl class <init>
-                String methodCall = String.format(format, Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName, calleeMethodName, calleeMethodArgs);
+                String methodCall = String.format(format, CallTypeEnum.CTE_RIR.getType(), calleeClassName, calleeMethodName, calleeMethodArgs);
                 MethodCallDto methodCallDto1 = MethodCallDto.genInstance(methodCall, getSourceLine());
                 methodCalls.add(methodCallDto1);
 
                 if (Boolean.FALSE.equals(recordedRunnable)) {
                     // runnable impl class <init> call runnable impl class run()
                     String runnableImplClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
-                            Constants.CALL_TYPE_RUNNABLE_INIT_RUN, calleeClassName);
+                            CallTypeEnum.CTE_RIR.getType(), calleeClassName);
                     MethodCallDto methodCallDto2 = MethodCallDto.genInstance(runnableImplClassMethod, Constants.DEFAULT_LINE_NUMBER);
                     methodCalls.add(methodCallDto2);
 
@@ -220,7 +221,7 @@ public class MethodVisitor extends EmptyVisitor {
                 // do not record original call type
                 skipRawMethodCall = true;
                 // other function call callable impl class <init>
-                String methodCall = String.format(format, Constants.CALL_TYPE_CALLABLE_INIT_CALL, calleeClassName, calleeMethodName,
+                String methodCall = String.format(format, CallTypeEnum.CTE_CIC.getType(), calleeClassName, calleeMethodName,
                         calleeMethodArgs);
                 MethodCallDto methodCallDto1 = MethodCallDto.genInstance(methodCall, getSourceLine());
                 methodCalls.add(methodCallDto1);
@@ -228,7 +229,7 @@ public class MethodVisitor extends EmptyVisitor {
                 if (Boolean.FALSE.equals(recordedCallable)) {
                     // callable impl class <init> call callable impl class call()
                     String callableImplClassMethod = String.format("M:%s:%s%s (%s)%s:call()", calleeClassName, calleeMethodName, calleeMethodArgs,
-                            Constants.CALL_TYPE_CALLABLE_INIT_CALL, calleeClassName);
+                            CallTypeEnum.CTE_CIC.getType(), calleeClassName);
                     MethodCallDto methodCallDto2 = MethodCallDto.genInstance(callableImplClassMethod, Constants.DEFAULT_LINE_NUMBER);
                     methodCalls.add(methodCallDto2);
 
@@ -240,7 +241,7 @@ public class MethodVisitor extends EmptyVisitor {
             if (Boolean.FALSE.equals(threadChildClassMap.get(calleeClassName))) {
                 // thread child class start() call run()
                 String threadChildClassMethod = String.format("M:%s:%s%s (%s)%s:run()", calleeClassName, calleeMethodName, calleeMethodArgs,
-                        Constants.CALL_TYPE_THREAD_START_RUN, calleeClassName);
+                        CallTypeEnum.CTE_TSR.getType(), calleeClassName);
                 MethodCallDto methodCallDto2 = MethodCallDto.genInstance(threadChildClassMethod, Constants.DEFAULT_LINE_NUMBER);
                 methodCalls.add(methodCallDto2);
 

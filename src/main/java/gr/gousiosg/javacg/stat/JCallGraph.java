@@ -30,6 +30,7 @@ package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
 import gr.gousiosg.javacg.dto.*;
+import gr.gousiosg.javacg.enums.CallTypeEnum;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.ClassParser;
 import org.apache.bcel.classfile.JavaClass;
@@ -69,6 +70,8 @@ public class JCallGraph {
     private static final String RUNNABLE_CLASS_NAME = Runnable.class.getName();
     private static final String CALLABLE_CLASS_NAME = Callable.class.getName();
     private static final String THREAD_CLASS_NAME = Thread.class.getName();
+
+    private static int jarNum = 0;
     // added end
 
     public static void main(String[] args) {
@@ -86,21 +89,44 @@ public class JCallGraph {
         // added end
 
         // modified by adrninistrator
-        try (BufferedWriter resultWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File(outputFilePath))));) {
+        Map<String, Integer> filePathSet = new HashMap<>(args.length);
+
+        String annotationOutputFilePath = outputFilePath + "-annotation.txt";
+        System.out.println("write method annotation information to file: " + annotationOutputFilePath);
+
+        try (BufferedWriter resultWriter = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File(outputFilePath))));
+             BufferedWriter annotationOut = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(annotationOutputFilePath),
+                     StandardCharsets.UTF_8))) {
             for (String arg : args) {
-                System.out.println("handle jar file: " + arg);
-                File f = new File(arg);
+                String jarFilePath = CommonUtil.getCanonicalPath(arg);
+                if (jarFilePath == null) {
+                    System.err.println("getCanonicalPath fail: " + arg);
+                    return false;
+                }
+
+                if (filePathSet.get(jarFilePath) != null) {
+                    System.out.println(arg + " skip jar file: " + jarFilePath);
+                    continue;
+                }
+
+                filePathSet.put(jarFilePath, ++jarNum);
+
+                System.out.println(arg + " handle jar file: " + jarFilePath);
+                File f = new File(jarFilePath);
 
                 if (!f.exists()) {
-                    System.err.println("Jar file " + arg + " does not exist");
+                    System.err.println("Jar file " + jarFilePath + " does not exist");
                 }
 
                 try (JarFile jar = new JarFile(f)) {
                     // added by adrninistrator
+                    writeResult(resultWriter, "J:" + jarNum + " " + jarFilePath);
+                    writeResult(resultWriter, Constants.NEW_LINE);
+
                     init();
 
                     // pre handle classes
-                    if (!preHandleClasses(arg, f)) {
+                    if (!preHandleClasses(jarFilePath, f)) {
                         return false;
                     }
                     // added end
@@ -108,7 +134,7 @@ public class JCallGraph {
                     for (Enumeration<JarEntry> enumeration = jar.entries(); enumeration.hasMoreElements(); ) {
                         JarEntry jarEntry = enumeration.nextElement();
                         if (!jarEntry.isDirectory() && jarEntry.getName().endsWith(".class")) {
-                            ClassParser cp = new ClassParser(arg, jarEntry.getName());
+                            ClassParser cp = new ClassParser(jarFilePath, jarEntry.getName());
                             JavaClass javaClass = cp.parse();
 
                             System.out.println("handle class: " + javaClass.getClassName());
@@ -131,6 +157,7 @@ public class JCallGraph {
                                 writeResult(resultWriter, methodCallDto.getMethodCall());
                                 if (methodCallDto.getSourceLine() != Constants.NONE_LINE_NUMBER) {
                                     writeResult(resultWriter, " " + methodCallDto.getSourceLine());
+                                    writeResult(resultWriter, " " + jarNum);
                                 }
                                 writeResult(resultWriter, Constants.NEW_LINE);
                             }
@@ -153,7 +180,7 @@ public class JCallGraph {
                     recordInterfaceCallClassMethod(resultWriter);
 
                     // record method annotation information
-                    recordMethodAnnotationInfo(outputFilePath);
+                    recordMethodAnnotationInfo(annotationOut);
                     // added end
                 }
             }
@@ -337,8 +364,9 @@ public class JCallGraph {
                 }
                 // add super class call child class method
                 String superCallChildClassMethod = String.format("M:%s:%s (%s)%s:%s %d", superClassName, superMethodWithArgs,
-                        Constants.CALL_TYPE_SUPER_CALL_CHILD, childClassName, superMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
+                        CallTypeEnum.CTE_SCC.getType(), childClassName, superMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
                 writeResult(resultWriter, superCallChildClassMethod);
+                writeResult(resultWriter, " " + jarNum);
                 writeResult(resultWriter, Constants.NEW_LINE);
                 continue;
             }
@@ -357,8 +385,9 @@ public class JCallGraph {
 
                 // add child class call super class method
                 String childCallSuperClassMethod = String.format("M:%s:%s (%s)%s:%s %d", childClassName, superMethodWithArgs,
-                        Constants.CALL_TYPE_CHILD_CALL_SUPER, superClassName, superMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
+                        CallTypeEnum.CTE_CCS.getType(), superClassName, superMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
                 writeResult(resultWriter, childCallSuperClassMethod);
+                writeResult(resultWriter, " " + jarNum);
                 writeResult(resultWriter, Constants.NEW_LINE);
             }
         }
@@ -398,8 +427,9 @@ public class JCallGraph {
                     }
 
                     String interfaceCallClassMethod = String.format("M:%s:%s (%s)%s:%s %d", interfaceName, classMethodWithArgs,
-                            Constants.CALL_TYPE_INTERFACE, className, classMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
+                            CallTypeEnum.CTE_ITF.getType(), className, classMethodWithArgs, Constants.DEFAULT_LINE_NUMBER);
                     writeResult(resultWriter, interfaceCallClassMethod);
+                    writeResult(resultWriter, " " + jarNum);
                     writeResult(resultWriter, Constants.NEW_LINE);
                 }
             }
@@ -551,22 +581,13 @@ public class JCallGraph {
     }
 
     // record method annotation information
-    private static void recordMethodAnnotationInfo(String outputFilePath) {
-        if (outputFilePath != null && !outputFilePath.isEmpty()) {
-            String annotationOutputFilePath = outputFilePath + "-annotation.txt";
-            System.out.println("write method annotation information to file: " + annotationOutputFilePath);
-            try (BufferedWriter out = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(annotationOutputFilePath),
-                    StandardCharsets.UTF_8))) {
-                for (Map.Entry<String, Set<String>> entry : methodAnnotationMap.entrySet()) {
-                    String fullMethod = entry.getKey();
-                    Set<String> annotationSet = entry.getValue();
-                    for (String annotation : annotationSet) {
-                        String methodWithAnnotation = fullMethod + " " + annotation + Constants.NEW_LINE;
-                        out.write(methodWithAnnotation);
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
+    private static void recordMethodAnnotationInfo(BufferedWriter out) throws IOException {
+        for (Map.Entry<String, Set<String>> entry : methodAnnotationMap.entrySet()) {
+            String fullMethod = entry.getKey();
+            Set<String> annotationSet = entry.getValue();
+            for (String annotation : annotationSet) {
+                String methodWithAnnotation = fullMethod + " " + annotation + Constants.NEW_LINE;
+                out.write(methodWithAnnotation);
             }
         }
     }

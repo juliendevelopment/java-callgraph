@@ -22,12 +22,12 @@ Program arguments:用于指定需要解析的jar包路径列表
 build/libs/a.jar build/libs/b.jar
 ```
 
-# 增强的java-callgraph增加的调用关系类型及调用者代码行号
+# 增加调用关系类型及调用者代码行号
 
 增强后的java-callgraph输出的方法调用关系的格式与原始java-callgraph基本一致，如下所示：
 
 ```
-M:class1:<method1>(arg_types) (typeofcall)class2:<method2>(arg_types) linenumber
+M:class1:<method1>(arg_types) (typeofcall)class2:<method2>(arg_types) line_number jar_number
 ```
 
 原始java-callgraph支持的调用类型arg_types如下：
@@ -50,7 +50,29 @@ M:class1:<method1>(arg_types) (typeofcall)class2:<method2>(arg_types) linenumber
 |SCC|父类调用子类的实现方法|
 |CCS|子类调用父类的实现方法|
 
-linenumber为当前调用者方法源代码对应行号。
+- line_number
+
+为当前调用者方法源代码对应行号
+
+- jar_number
+
+jar包序号，从1开始
+
+# 增加jar包文件路径
+
+增强后的java-callgraph会输出当前jar包文件路径，如下所示：
+
+```
+J:jar_number jar_file_path
+```
+
+- jar_number
+
+jar包序号，从1开始
+
+- jar_file_path
+
+jar包文件路径
 
 # 原始java-callgraph调用关系缺失的场景
 

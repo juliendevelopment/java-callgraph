@@ -30,6 +30,7 @@ package gr.gousiosg.javacg.stat;
 
 import gr.gousiosg.javacg.common.Constants;
 import gr.gousiosg.javacg.dto.MethodCallDto;
+import gr.gousiosg.javacg.enums.CallTypeEnum;
 import gr.gousiosg.javacg.util.CommonUtil;
 import org.apache.bcel.classfile.*;
 import org.apache.bcel.generic.ConstantPoolGen;
@@ -164,7 +165,7 @@ public class ClassVisitor extends EmptyVisitor {
                 }
                 String lambdaMethodCall = String.format("M:%s:%s%s (%s)%s:%s%s", jc.getClassName(), origMethod.getName(),
                         CommonUtil.argumentList(origMethod.getArgumentTypes()),
-                        Constants.CALL_TYPE_LAMBDA, jc.getClassName(), lambdaMethodName, CommonUtil.argumentList(method.getArgumentTypes()));
+                        CallTypeEnum.CTE_LM.getType(), jc.getClassName(), lambdaMethodName, CommonUtil.argumentList(method.getArgumentTypes()));
 
                 MethodCallDto methodCallDto = MethodCallDto.genInstance(lambdaMethodCall, Constants.DEFAULT_LINE_NUMBER);
                 methodCalls.add(methodCallDto);
