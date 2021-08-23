@@ -1,5 +1,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/com.github.adrninistrator/java-callgraph.svg)](https://search.maven.org/artifact/com.github.adrninistrator/java-callgraph/)
 
+该项目已移至[https://github.com/Adrninistrator/java-callgraph2](https://github.com/Adrninistrator/java-callgraph2)
+
 # 使用说明
 
 编译命令：
