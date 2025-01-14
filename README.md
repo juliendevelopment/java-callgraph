@@ -22,3 +22,4 @@ my fork is to add those change
 
 * https://github.com/gousiosg/java-callgraph/issues/30
 * fix the generation of the jar with dependencies and manifest
+* better detection of method reference in a stream 
