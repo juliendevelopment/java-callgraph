@@ -182,7 +182,7 @@ public class MethodVisitor extends EmptyVisitor {
     }
 
     // added by adrninistrator
-    private void addMethodCalls(String type, String calleeClassName, String calleeMethodName, String calleeMethodArgs) {
+	void addMethodCalls(String type, String calleeClassName, String calleeMethodName, String calleeMethodArgs) {
         // add callee method info
         Set<String> calleeMethodWithArgsSet = calleeMethodMap.get(calleeClassName);
         if (calleeMethodWithArgsSet == null) {

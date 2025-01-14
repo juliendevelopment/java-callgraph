@@ -111,7 +111,7 @@ public class ClassVisitor extends EmptyVisitor {
     @Override
     public void visitMethod(Method method) {
         MethodGen mg = new MethodGen(method, clazz.getClassName(), constants);
-        MethodVisitor visitor = new MethodVisitor(mg, clazz);
+		MethodVisitorExtended visitor = new MethodVisitorExtended(mg, clazz);
         visitor.setCalleeMethodMap(calleeMethodMap);
         visitor.setRunnableImplClassMap(runnableImplClassMap);
         visitor.setCallableImplClassMap(callableImplClassMap);
