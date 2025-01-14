@@ -114,20 +114,26 @@ publishing {
         maven {
             name 'sonatypeRepository'
             url 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
-            credentials {
-                username = "${NEXUS_USERNAME}"
-                password = "${NEXUS_PASSWORD}"
-            }
         }
         maven {
             name = 'sonatypeSnapshotRepository'
             url = 'https://oss.sonatype.org/content/repositories/snapshots/'
-            credentials {
-                username = "${NEXUS_USERNAME}"
-                password = "${NEXUS_PASSWORD}"
-            }
         }
     }
+}
+
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'gr.gousiosg.javacg.stat.JCallGraph'
+    }
+
+    // This is the important part that includes dependencies
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    setDuplicatesStrategy(DuplicatesStrategy.INCLUDE)
 }
 
 signing {
