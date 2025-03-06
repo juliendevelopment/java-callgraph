@@ -13,14 +13,25 @@
 
 package gr.gousiosg.javacg.stat;
 
-import org.apache.bcel.classfile.*;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.bcel.classfile.Attribute;
+import org.apache.bcel.classfile.BootstrapMethod;
+import org.apache.bcel.classfile.BootstrapMethods;
+import org.apache.bcel.classfile.Constant;
+import org.apache.bcel.classfile.ConstantCP;
+import org.apache.bcel.classfile.ConstantMethodHandle;
+import org.apache.bcel.classfile.ConstantNameAndType;
+import org.apache.bcel.classfile.ConstantPool;
+import org.apache.bcel.classfile.ConstantString;
+import org.apache.bcel.classfile.ConstantUtf8;
+import org.apache.bcel.classfile.JavaClass;
+import org.apache.bcel.classfile.Method;
 
 /**
  * {@link DynamicCallManager} provides facilities to retrieve information about
@@ -93,10 +104,21 @@ public class DynamicCallManager {
 	}
 
 	private String getMethodNameFromHandleIndex(ConstantPool cp, int callIndex) {
-		ConstantMethodHandle handle = (ConstantMethodHandle) cp.getConstant(callIndex);
-		ConstantCP ref = (ConstantCP) cp.getConstant(handle.getReferenceIndex());
-		ConstantNameAndType nameAndType = (ConstantNameAndType) cp.getConstant(ref.getNameAndTypeIndex());
-		return nameAndType.getName(cp);
+
+		Constant constant = cp.getConstant(callIndex);
+		if (constant instanceof ConstantMethodHandle) {
+			ConstantMethodHandle handle = (ConstantMethodHandle) constant;
+			ConstantCP ref = (ConstantCP) cp.getConstant(handle.getReferenceIndex());
+			ConstantNameAndType nameAndType = (ConstantNameAndType) cp.getConstant(ref.getNameAndTypeIndex());
+			return nameAndType.getName(cp);
+		}
+
+		if (constant instanceof ConstantString) {
+			// TODO this code failled because of record
+			// TOBE fixed
+			return "record";
+		}
+		throw new IllegalStateException("impossible to get constant of type " + constant.getClass().getName());
 	}
 
 	/**
